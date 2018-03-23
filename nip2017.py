@@ -1,68 +1,3 @@
-# # -*- coding:utf-8 -*-
-# import torch
-# from torch import nn
-# from torch.autograd import Variable
-# from torch.autograd.gradcheck import zero_gradients
-# import torchvision.transforms as T
-# from torchvision.models.inception import inception_v3
-# from PIL import Image
-# import matplotlib.pyplot as plt
-# import numpy as np 
-
-# classes = eval(open('classes.txt').read())
-# trans = T.Compose([T.ToTensor(),T.Lambda(lambda t:t.unsqueeze(0))])
-# reverse_trans = lambda x:np.asarray(T.ToPILImage()(x))
-# eps = 2*8/255
-# steps = 40
-# norm = float('inf')
-# step_alpha = 0.0001
-# model = inception_v3(pretrained=True,transforms_input=True).cpu()
-# loss = nn.CrossEntropyLoss()
-# model.eval()
-
-# # visualization
-# def loat_image(img_path):
-# 	img = trans(Image.open(img_path).convert('RGB'))
-# 	return img
-# def get_class(img):
-# 	x = Variable(img,volatile=True).cpu()
-# 	cls = model(x).data.max(1)[1].cpu().numpy()[0]
-# 	return classes[cls]
-# def draw_result(img,noise,adv_img):
-# 	fig,ax = plt.subplots(1,3,figsize=(15,10))
-# 	orig_class,attack_class = get_class(img),get_class(adv_img)
-# 	ax[0].imshow(reverse_trans(img[0]))
-# 	ax[0].set_title('Original image:{}'.format(orig_class.split(','[0]))
-# 	ax[1].imshow(noise[0].cpu().numpy().transpose(1,2,0))
-# 	ax[1].set_title('Attacking noise')
-# 	ax[2].imshow(reverse_trans(adv_img[0]))
-# 	ax[2].set_title('Adversarial example:{}'.format(attack_class))
-# 	for i in range(3):
-# 		ax[i].set_axis_off()
-# 		plt.tight_layout()
-# 		plt.show()
-
-# def non_targetd_attack(img):
-# 	img = img.cpu()
-# 	label = troch.zeros(1,1).cpu()
-# 	x,y = Variable(img,requires_grad=True),Variable(label)
-# 	for step in range(steps):
-# 		zeros_gradients(x)
-# 		out = model(x)
-# 		y.data = out.data.max(1)[1]
-# 		_loss = loss(out,y)
-# 		_loss.backward()
-# 		normed_grad = step_alpha*torch.sign(x.grad.data)
-# 		step_adv = x.data + normed_grad
-# 		adv = step_adv - img
-# 		adv = torch.clamp(adv,-eps,eps)
-# 		result = img + adv 
-# 		result = torch.clamp(result,0.0,1.0)
-# 		x.data = result
-# 		return result.cpu(),adv.cpu()
-# img = load_image('input.png')
-# adv_img.noise = non_targetd_attack(img)
-# draw_result(img,noise,adv_img)
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
 import tensorflow.contrib.slim.nets as nets
@@ -139,4 +74,87 @@ new_w = 299 if not wide else int(img.width * 299 / img.height)
 new_h = 299 if wide else int(img.height * 299 / img.width)
 img = img.resize((new_w, new_h)).crop((0, 0, 299, 299))
 img = (np.asarray(img) / 255.0).astype(np.float32)
-classify(img, correct_class=img_class)
+
+# initial
+x = tf.placeholder(tf.float32,(299,299,3))
+x_hat = image# our trainable adversarial input
+print(type(x),type(x_hat))
+assign_op = tf.assign(x_hat,x)
+# gradientDescent
+learning_rate = tf.placeholder(tf.float32,())
+y_hat = tf.placeholder(tf.int32,())
+labels = tf.one_hot(y_hat,1000)
+loss = tf.nn.softmax_cross_entropy_with_logits(logits=logits,labels=[labels])
+optim_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss,var_list=[x_hat])
+# epsilon
+epsilon = tf.placeholder(tf.float32,())
+
+below = x - epsilon
+above = x + epsilon
+projected = tf.clip_by_value(tf.clip_by_value(x_hat,below,above),0,1)
+with tf.control_dependencies([projected]):
+    projected_step = tf.assign(x_hat,projected)
+
+# excute
+demo_epsilon = 2.0/255.0
+demo_lr = 1e-1
+demo_steps = 100
+demo_target=924 # "guacamole"
+
+# initialization step
+sess.run(assign_op,feed_dict={x:img})
+
+# projected gradientDescent
+for i in range(demo_steps):
+    _, loss_value = sess.run(
+        [optim_step, loss],
+        feed_dict={learning_rate: demo_lr,y_hat:demo_target})
+    sess.run(project_step, feed_dict={x:img,epsilon:demo_epsilon})
+    if (i+1)%10 == 0:
+        print('step %d, loss=%g' % (i+1,loss_value))
+
+adv=x_hat.eval()
+
+classify(adv, correct_class=img_class,target_class=demo_target)
+
+
+# classify(img, correct_class=img_class)
+
+# initial
+# x = tf.placeholder(tf.float32,(299,299,3))
+# x_hat = image # our trainable adversarial input
+# assign_op = tf.assign(x_hat,x)
+# # gradientDescent
+# learning_rate = tf.placeholder(tf.float32,())
+# y_hat = tf.placeholder(tf.int32,())
+# labels = tf.one_hot(y_hat,1000)
+# loss = tf.nn.softmax_cross_entropy_with_logits(logits=logits,labels=[labels])
+# optim_step = tf.train.gradientDescentOptimizer(learning_rate).minimize(loss,var_list=[x_hat])
+# # epsilon
+# epsilon = tf.placeholder(tf.float32,())
+#
+# below = x - epsilon
+# above = x + epsilon
+# projected = tf.clip_by_value(tf.clip_by_value(x_hat,below,above),0,1)
+# with tf.control_dependencies([projected]):
+#     projected_step = tf.assign(x_hat,projected)
+#
+# # excute
+# demo_epsilon = 2.0/255.0
+# demo_lr = 1e-1
+# demo_steps = 100
+# demo_target=924 # "guacamole"
+#
+# # initialization step
+# sess.run(assign_op,feed_dict={x:img})
+#
+# # projected gradientDescent
+# for i in range(demo_steps):
+#     _, loss_value = sess.run(
+#         [optim_step, loss],
+#         feed_dict={learning_rate: demo_lr,y_hat:demo_target})
+#     sess.run(project_step, feed_dict={x:img,epsilon:demo_epsilon})
+#     if (i+1)%10 == 0:
+#         print('step %d, loss=%g' % (i+1,loss_value))
+#
+# adv=x_hat.eval()
